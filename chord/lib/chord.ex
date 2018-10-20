@@ -1,22 +1,11 @@
 defmodule Chord do
   use GenServer
 
-  @moduledoc """
-  Documentation for Chord.
-  """
+  def init(numNodes, numRequests) do
+    # avg_hops, hop_list, numNodes
+    {:ok, [0, [], numNodes, numRequests]}
+  end
 
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> Chord.hello()
-      :world
-
-  """
-  # def init(args) do
-  #   {:ok, []}
-  # end
   def get_number_of_bits(numNodes) do
     Kernel.trunc(:math.ceil(:math.log2(numNodes)))
   end
@@ -31,7 +20,12 @@ defmodule Chord do
     m = get_number_of_bits(numNodes)
     keys = get_keys(Kernel.trunc(:math.pow(2, m)), numNodes, [])
     IO.inspect(keys ++ ['0'])
+    GenServer.start_link(Chord, numNodes, numRequests, name: Master)
     Peer.create(numNodes, keys, m)
+    # for i <- 0..numNodes-1 do
+    # TODO Refactor the handler name here 
+    GenServer.cast(Peer.get_node_name(0), {:initiate, {numRequests, keys}})
+    # end
     Process.sleep(:infinity)
   end
 
@@ -51,5 +45,16 @@ defmodule Chord do
     else
       get_keys(n, limit - 1, keys ++ [random_key])
     end
+  end
+
+  # Node hibernate finale
+  def handle_cast({:hibernate, node}, [avg_hops, hop_list, numNodes]) do
+    new_list = hop_list ++ avg_hops
+
+    if Kernel.length(new_list) === numNodes do
+      IO.puts('Converged with Avg Hops=#{Enum.sum(new_list) / numNodes}')
+    end
+
+    {:noreply, [avg_hops, hop_list ++ avg_hops, numNodes]}
   end
 end
