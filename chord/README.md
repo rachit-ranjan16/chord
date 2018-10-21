@@ -28,5 +28,5 @@ Implement Chord Protocol with Distributed Hash Tables for O(log m) lookup
 
 ## Observations 
   - Largest Network 
-    - `numNodes` = 100000
-    - `numRequests` = 100 
+    - `numNodes` = 10000
+    - `numRequests` = 10 
