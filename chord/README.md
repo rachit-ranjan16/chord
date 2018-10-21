@@ -1,4 +1,4 @@
-# GossipSim - Gossip Simulator 
+# Chord
 ### Description 
 Implement Chord Protocol with Distributed Hash Tables for O(log m) lookup  
 
