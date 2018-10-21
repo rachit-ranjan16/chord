@@ -25,6 +25,7 @@ defmodule Chord do
 
     GenServer.start_link(Chord, [numNodes, numRequests], name: Master)
     # Create Chord Ring
+    IO.puts "Initializing Chord Ring with #{numNodes} nodes..."
     Peer.create(numNodes, keys, m, numRequests)
     # Initiate numRequest random lookups in each of numNodes 
     for i <- 0..(numNodes - 1) do
