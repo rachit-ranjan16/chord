@@ -1,21 +1,32 @@
-# Chord
+# GossipSim - Gossip Simulator 
+### Description 
+Implement Chord Protocol with Distributed Hash Tables for O(log m) lookup  
 
-**TODO: Add description**
+## Group Members 
+  - **Rachit Ranjan** 
+  - **Aditya Vashist** 
 
-## Installation
+## Prerequisites 
+  - Elixir 1.7+ Installation  
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `chord` to your list of dependencies in `mix.exs`:
+## Execution Instructions 
+  - Navigate to `chord`  
+  - Compile and Build 
+    - `mix compile`
+    - `mix run` 
+    - `mix escript.build`
+  - Execute 
+    - `./chord numNodes numRequests` 
+      - `numNodes`: Integer 
+      - `numRequests`: Integer
+  - Key Terms in the generated logs 
+    - `initiate`: Node will start firing `numRequests` lookups
+    - `Lookup`: A node in chord ring has received a request from another node to lookup a key 
+    - `Notify`: Node that initiated a lookup request received an async ack that the key has been found in the ring 
+    - `Converged`: All `numNodes` have made `numRequest` lookups and the calls succeeded
+  - Main Process will exit after convergence 
 
-```elixir
-def deps do
-  [
-    {:chord, "~> 0.1.0"}
-  ]
-end
-```
-
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/chord](https://hexdocs.pm/chord).
-
+## Observations 
+  - Largest Network 
+    - `numNodes` = 100000
+    - `numRequests` = 100 

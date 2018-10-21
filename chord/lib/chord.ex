@@ -1,15 +1,16 @@
 defmodule Chord do
   use GenServer
 
-  def init(numNodes, numRequests) do
+  def init([numNodes, numRequests]) do
     # avg_hops, hop_list, numNodes
-    {:ok, [0, [], numNodes, numRequests]}
+    {:ok, {[], numNodes, numRequests}}
   end
 
   def get_number_of_bits(numNodes) do
     Kernel.trunc(:math.ceil(:math.log2(numNodes)))
   end
 
+  # Validation Check
   def main(args) when Kernel.length(args) != 2 do
     raise ArgumentError, message: "Insufficient/Excess Arguments. Enter numRequests and numNodes"
   end
@@ -17,15 +18,19 @@ defmodule Chord do
   def main(args) do
     numNodes = String.to_integer(Enum.at(args, 0))
     numRequests = String.to_integer(Enum.at(args, 1))
+
     m = get_number_of_bits(numNodes)
     keys = get_keys(Kernel.trunc(:math.pow(2, m)), numNodes, [])
-    IO.inspect(keys ++ ['0'])
-    GenServer.start_link(Chord, numNodes, numRequests, name: Master)
-    Peer.create(numNodes, keys, m)
-    # for i <- 0..numNodes-1 do
-    # TODO Refactor the handler name here 
-    GenServer.cast(Peer.get_node_name(0), {:initiate, {numRequests, keys}})
-    # end
+    # IO.inspect(keys ++ ['0'])
+
+    GenServer.start_link(Chord, [numNodes, numRequests], name: Master)
+    # Create Chord Ring
+    Peer.create(numNodes, keys, m, numRequests)
+    # Initiate numRequest random lookups in each of numNodes 
+    for i <- 0..(numNodes - 1) do
+      GenServer.cast(Peer.get_node_name(Enum.at(keys, i)), {:initiate, {numRequests, keys}})
+    end
+
     Process.sleep(:infinity)
   end
 
@@ -48,13 +53,18 @@ defmodule Chord do
   end
 
   # Node hibernate finale
-  def handle_cast({:hibernate, node}, [avg_hops, hop_list, numNodes]) do
-    new_list = hop_list ++ avg_hops
-
+  def handle_cast(
+        {:hibernate, avg},
+        {hop_list, numNodes, numRequests}
+      ) do
+    # IO.puts("Received Hibernate")
+    new_list = hop_list ++ [avg]
+    # Calculate Hop Average  
     if Kernel.length(new_list) === numNodes do
-      IO.puts('Converged with Avg Hops=#{Enum.sum(new_list) / numNodes}')
+      IO.puts("\n\n\nConverged with Avg Hops=#{Enum.sum(new_list) / numNodes}\n\n\n")
+      Process.exit(self(), "Execution Complete :)")
     end
 
-    {:noreply, [avg_hops, hop_list ++ avg_hops, numNodes]}
+    {:noreply, {hop_list ++ [avg], numNodes, numRequests}}
   end
 end

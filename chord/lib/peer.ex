@@ -1,23 +1,28 @@
 defmodule Peer do
   use GenServer
 
-  def init([id, m, keys]) do
+  def init([id, m, keys, numRequests]) do
     finger_table = get_finger_table(id, m, 1, keys, [])
+
     # IO.puts("Node: " <> get_node_name(id) <> "  " <> Kernel.inspect(finger_table ++ ['0']))
-    IO.puts(id)
-    IO.puts(Kernel.inspect(finger_table ++ ['0']))
+    # IO.puts(id)
+    # IO.puts(Kernel.inspect(finger_table ++ ['0']))
+
     # numRequests, keys, id, finger_table, target, hop_count, hop_list, source
-    {:ok, {0, [], id, finger_table, 0, 0, [], 0}}
+    {:ok, [numRequests, [], id, finger_table, 0, 0, [], 0]}
   end
 
-  def create(n, keys, m) do
-    # nodes =
+  # Creates Chord Ring 
+  def create(n, keys, m, numRequests) do
     for i <- 0..(n - 1) do
-      GenServer.start_link(Peer, [Enum.at(keys, i), m, keys], name: get_node_name(i))
+      GenServer.start_link(Peer, [Enum.at(keys, i), m, keys, numRequests],
+        name: get_node_name(Enum.at(keys, i))
+      )
     end
   end
 
-  def get_finger_table(id, m, i, keys, finger_table) when i > m do
+  # Populates Finger Table for each node 
+  def get_finger_table(_id, m, i, _keys, finger_table) when i > m do
     finger_table
   end
 
@@ -40,7 +45,7 @@ defmodule Peer do
           Enum.filter(keys, fn x -> x < low end)
           |> Enum.map(fn x -> x + Kernel.trunc(:math.pow(2, m)) end)
 
-        IO.puts(Kernel.inspect(temp))
+        # IO.puts(Kernel.inspect(temp))
         (temp ++ Enum.filter(keys, fn x -> x >= low end)) |> Enum.sort()
       end
 
@@ -95,30 +100,43 @@ defmodule Peer do
     )
   end
 
+  # Helper function to get node name 
   def get_node_name(i) do
     id = i |> Integer.to_string() |> String.pad_leading(4, "0")
     ("Elixir.N" <> id) |> String.to_atom()
   end
 
-  def create_lookup(id, i, limit, keys, finger_table, hop_count) do
-    key = get_random_key(keys, id)
-    dest = Enum.at(finger_table, find_dest_index(key, finger_table, 0))
-    GenServer.cast(Peer.get_node_name(dest), {:lookup, key, id, hop_count + 1})
+  # Starts lookup for a random key from the set of keys 
+  def create_lookup(id, i, limit, _keys, _finger_table, _hop_count) when i === limit do
+    IO.puts("ID=#{id} All set initiating requests")
   end
 
+  def create_lookup(id, i, limit, keys, finger_table, hop_count) when i < limit do
+    key = get_random_key(keys, id)
+    dest = Enum.at(Enum.sort(finger_table), find_dest_index(key, finger_table, 0))
+
+    # IO.puts("ID=#{id} Target=#{key} Dest=#{dest} Dest_Ind=#{find_dest_index(key, finger_table, 0)} DestName=#{Peer.get_node_name(dest)}")
+    # IO.puts(Kernel.inspect(finger_table ++ ['0']))
+
+    GenServer.cast(Peer.get_node_name(dest), {:lookup, {key, id, hop_count + 1}})
+    Process.sleep(1000)
+    create_lookup(id, i + 1, limit, keys, finger_table, hop_count)
+  end
+
+  # Traverses finger table to find destination node's index 
   def find_dest_index(target, finger_table, i) when i < Kernel.length(finger_table) do
-    if Enum.at(finger_table, i) >= target do
+    if Enum.at(Enum.sort(finger_table), i) > target do
       i - 1
     else
       find_dest_index(target, finger_table, i + 1)
     end
   end
 
-  def find_dest_index(target, finger_table, i) when i == Kernel.length() do
-    # IO.puts "ERRROR"
-    i
+  def find_dest_index(target, finger_table, i) when i == Kernel.length(finger_table) do
+    i - 1
   end
 
+  # Returns a random key to be looked up -excluding self key
   def get_random_key(keys, id) do
     random_key = Enum.random(keys)
 
@@ -130,10 +148,9 @@ defmodule Peer do
   end
 
   # Handle Initiate Request from Master 
-  # TODO refactor handler name 
-  def handle_cast({:initiate, _received}, [
-        numRequests,
-        keys,
+  def handle_cast({:initiate, {numR, ks}}, [
+        _numRequests,
+        _keys,
         id,
         finger_table,
         _target,
@@ -141,46 +158,75 @@ defmodule Peer do
         _hop_list,
         _source
       ]) do
-    create_lookup(id, 0, numRequests, keys, finger_table, 0)
-    {:noreply, [numRequests, keys, id, finger_table, _target, _hop_count, _hop_list]}
+    IO.puts("ID=#{id} Received Initiate. Will start lookups")
+    create_lookup(id, 0, numR, ks, finger_table, 0)
+    {:noreply, [numR, ks, id, finger_table, _target, _hop_count, _hop_list, _source]}
   end
 
-  # 
-  def handle_cast({:lookup, _received}, [
+  # Handle Lookup request for a key from peer node 
+  def handle_cast({:lookup, {target_key, src, hop_count_received}}, [
         _numRequests,
         _keys,
-        _id,
+        id,
         finger_table,
-        target,
-        hop_count,
-        hop_list,
-        source
+        _target,
+        _hop_count,
+        _hop_list,
+        _source
       ]) do
-    if target == id do
-      GenServer.cast(Peer.get_node_name(source), {:notify, {hop_count + 1}})
+    IO.puts("ID=#{id} Received Lookup Request for Target=#{target_key} ")
+
+    if target_key === id do
+      # IO.puts("In the notify block")
+      GenServer.cast(Peer.get_node_name(src), {:notify, {hop_count_received + 1}})
 
       {:noreply,
-       [_numRequests, _keys, _id, _finger_table, _target, _hop_count, _hop_list, _source]}
+       [
+         _numRequests,
+         _keys,
+         id,
+         finger_table,
+         target_key,
+         hop_count_received + 1,
+         _hop_list,
+         _source
+       ]}
     else
-      dest = Enum.at(finger_table, find_dest_index(target, finger_table, 0))
-      GenServer.cast(Peer.get_node_name(dest), {:lookup, target, source, hop_count + 1})
+      # IO.puts("In the forward lookup block")
+
+      dest = Enum.at(Enum.sort(finger_table), find_dest_index(target_key, finger_table, 0))
+
+      # IO.puts(
+      #   "ID=#{id} Target=#{target_key} Dest=#{dest} DestName=#{Peer.get_node_name(dest)} Dest_Ind=#{
+      #     find_dest_index(target_key, finger_table, 0)
+      #   } Src=#{src}"
+      # )
+
+      GenServer.cast(
+        Peer.get_node_name(dest),
+        {:lookup, {target_key, src, hop_count_received + 1}}
+      )
 
       {:noreply,
-       [_numRequests, _keys, _id, _finger_table, _target, _hop_count, _hop_list, _source]}
+       [_numRequests, _keys, id, finger_table, target_key, hop_count_received, _hop_list, _source]}
     end
   end
 
-  def handle_cast({:notify, _received}, [
+  # Notification once a key is found in chord
+  def handle_cast({:notify, {hop_count_received}}, [
         numRequests,
         _keys,
-        _id,
+        id,
         _finger_table,
         _target,
-        hop_count,
+        _hop_count,
         hop_list,
         _source
       ]) do
-    hop_list = hop_list ++ [hop_count]
+    hop_list = hop_list ++ [hop_count_received]
+    IO.puts("ID=#{id} Received Notify. Lookup Succeeded")
+
+    # IO.puts("hop_list=#{Kernel.inspect(hop_list ++ ['0'])} length=#{Kernel.length(hop_list)} numRequests=#{numRequests} Sum=#{Enum.sum(hop_list)}")
 
     if Kernel.length(hop_list) === numRequests do
       GenServer.cast(Master, {:hibernate, Enum.sum(hop_list) / numRequests})
@@ -188,12 +234,12 @@ defmodule Peer do
 
     {:noreply,
      [
-       _numRequests,
+       numRequests,
        _keys,
-       _id,
+       id,
        _finger_table,
        _target,
-       _hop_count,
+       hop_count_received,
        hop_list,
        _source
      ]}
