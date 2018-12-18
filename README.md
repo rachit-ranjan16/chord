@@ -9,7 +9,7 @@ Implement Chord Protocol with Distributed Hash Tables for O(log m) lookup
 ## Prerequisites 
   - Elixir 1.7+ Installation  
 
-## Execution Instructions 
+## Execution Instructions  
   - Navigate to `chord`  
   - Compile and Build 
     - `mix compile`
